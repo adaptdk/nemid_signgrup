@@ -111,7 +111,7 @@ function nemid_signgrup_block_view($delta = '') {
         $block['content'] = array(
           'script_block' => array(
             '#type' => 'markup',
-            '#markup' => $nemidClient->generateNemIDOtpScriptBlock('nemid-signgrup-callback'),
+            '#markup' => $nemidClient->generateNemIDOtpScriptBlock('/nemid-signgrup-callback'),
           ),
           'iframe' => array(
             '#type' => 'html_tag',
@@ -124,18 +124,21 @@ function nemid_signgrup_block_view($delta = '') {
           ),
         );
         // Set NemID transaction identifier. Used to verify transaction in nemid_signgrup_callback().
-        $_SESSION['transactionIdentifier'] = $nemidClient->transactionIdentifier;
+        $_SESSION['nemid_signgrup_transaction_identifier'] = $nemidClient->transactionIdentifier;
       break;
   }
   return $block;
 }
 
+/**
+ * NemID signup callback. Used to handle authentication success/failure.
+ */
 function nemid_signgrup_callback() {
-  $transactionIdentifier = $_SESSION['transactionIdentifier'];
-  unset($_SESSION['transactionIdentifier']);
+  $transaction_identifier = $_SESSION['nemid_signgrup_transaction_identifier'];
+  unset($_SESSION['nemid_signgrup_transaction_identifier']);
 
   $validator = new \AuthenticationPlugin\NemID\NemIDValidator();
-  $validation_result = $validator->ValidateNemIdResult($_POST["result"], $transactionIdentifier);
+  $validation_result = $validator->ValidateNemIdResult($_POST["result"], $transaction_identifier);
   $nemid_info = $validation_result->getNemIDInfo();
 
   $wd = function($validation_result, $nemid_info, $type = WATCHDOG_NOTICE) {

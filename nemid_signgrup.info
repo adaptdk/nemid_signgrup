@@ -1,0 +1,4 @@
+name = NemID Signaturgruppen
+description = NemID integration with client from Signaturgruppen.
+core = 7.x
+package = NemID Signaturgruppen

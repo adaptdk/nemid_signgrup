@@ -1,0 +1,176 @@
+<?php
+/**
+ * @file
+ * NemID Signaturgruppen.
+ */
+
+define('NEMID_SIGNGRUP_WD', 'nemid_signgrup');
+
+/**
+ * Implements hook_boot().
+ */
+function nemid_signgrup_boot() {
+  if ($vendor_path = variable_get('nemid_signgrup_vendor_dir', FALSE)) {
+    require_once $vendor_path . '/autoload.php';
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function nemid_signgrup_menu() {
+  $items['nemid-signgrup-callback'] = array(
+    'title' => 'NemID Callback url',
+    'description' => 'The url that is called by the NemID client after authentication',
+    'page callback' => 'nemid_signgrup_callback',
+    'access arguments' => array('access content'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_block_info().
+ *
+ * This hook declares what blocks are provided by the module.
+ */
+function nemid_signgrup_block_info() {
+  $blocks['nemid_signgrup_login'] = array(
+    'info' => t('Nemid Login form'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_configure().
+ *
+ * This hook declares configuration options for blocks provided by this module.
+ */
+function nemid_signgrup_block_configure($delta = '') {
+  $form = array();
+  if ($delta == 'nemid_signgrup_login') {
+    $form['vendor_dir'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Vendor path'),
+      '#size' => 60,
+      '#description' => t('The relative path to the vendor library from the drupal root.'),
+      '#default_value' => variable_get('nemid_signgrup_vendor_dir', ''),
+      '#required' => TRUE,
+    );
+    $form['success_url'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Success url'),
+      '#size' => 60,
+      '#description' => t('The url to be redirected to after success.'),
+      '#default_value' => variable_get('nemid_signgrup_login_success_url', ''),
+      '#required' => TRUE,
+    );
+  }
+  return $form;
+}
+
+/**
+ * Implements hook_block_save().
+ *
+ * This hook declares how the configured options for a block
+ * provided by this module are saved.
+ */
+function nemid_signgrup_block_save($delta = '', $edit = array()) {
+  if ($delta == 'nemid_signgrup_login') {
+    variable_set('nemid_signgrup_vendor_dir', $edit['vendor_dir']);
+    variable_set('nemid_signgrup_login_success_url', $edit['success_url']);
+  }
+}
+
+/**
+ * Implements hook_block_view().
+ *
+ * This hook generates the contents of the blocks themselves.
+ */
+function nemid_signgrup_block_view($delta = '') {
+  $block = array(
+    'subject' => '',
+    'content' => '',
+  );
+
+  // The $delta parameter tells us which block is being requested.
+  switch ($delta) {
+    case 'nemid_signgrup_login':
+        if (
+          !class_exists('AuthenticationPlugin\NemID\NemIDClient')
+          || !variable_get('nemid_signgrup_login_success_url', FALSE)
+        ) {
+          drupal_set_message('NemID client could not be loaded because of insufficient configuration', 'error');
+          return $block;
+        }
+        $urls = new AuthenticationPlugin\NemID\AuthenticationBackendUrls();
+        $nemidClient = new AuthenticationPlugin\NemID\NemIDClient();
+        $block['content'] = array(
+          'script_block' => array(
+            '#type' => 'markup',
+            '#markup' => $nemidClient->generateNemIDOtpScriptBlock('nemid-signgrup-callback'),
+          ),
+          'iframe' => array(
+            '#type' => 'html_tag',
+            '#tag' => 'iframe',
+            '#attributes' => array(
+              'src' => $urls->iframeUrl,
+              'scrolling' => 'no',
+              'style' => 'position:relative; width: 200px; height: 275px; border: none; margin: 0; padding: 0;',
+            ),
+          ),
+        );
+        // Set NemID transaction identifier. Used to verify transaction in nemid_signgrup_callback().
+        $_SESSION['transactionIdentifier'] = $nemidClient->transactionIdentifier;
+      break;
+  }
+  return $block;
+}
+
+function nemid_signgrup_callback() {
+  $transactionIdentifier = $_SESSION['transactionIdentifier'];
+  unset($_SESSION['transactionIdentifier']);
+
+  $validator = new \AuthenticationPlugin\NemID\NemIDValidator();
+  $validation_result = $validator->ValidateNemIdResult($_POST["result"], $transactionIdentifier);
+  $nemid_info = $validation_result->getNemIDInfo();
+
+  $wd = function($validation_result, $nemid_info, $type = WATCHDOG_NOTICE) {
+    watchdog(
+      NEMID_SIGNGRUP_WD,
+      'Status code: @status_code. Log message: "@log_message". User info: "@user_info"',
+      array(
+        '@status_code' => $validation_result->getStatusCode(),
+        '@log_message' => $validation_result->getLogMessage(),
+        '@user_info' => $nemid_info->dn,
+      ),
+      $type
+    );
+  };
+
+  if ($validation_result->authenticationSuccess()) {
+    $wd($validation_result, $nemid_info);
+    module_invoke_all('nemid_signgrup_callback_success', $validation_result->getNemIDInfo());
+  }
+  else {
+    $wd($validation_result, $nemid_info, WATCHDOG_ERROR);
+    module_invoke_all('nemid_signgrup_callback_failure');
+  }
+
+  if ($validation_result->userCancelled()) {
+    $wd($validation_result, $nemid_info, WATCHDOG_ERROR);
+    module_invoke_all('nemid_signgrup_callback_user_cancel', $validation_result->getNemIDInfo());
+  }
+
+  // On ClientFlowError, a specific NemID ErrorCode will be available.
+  if ($validation_result->getStatusCode() == \AuthenticationPlugin\NemID\StatusCode::ClientFlowError) {
+    watchdog(
+      NEMID_SIGNGRUP_WD,
+      'NemID authentication failed with a client flow error code: "@cf_error_code"',
+      array('@cf_error_code' => $validation_result->getNemIDErrorCode())
+    );
+  }
+}

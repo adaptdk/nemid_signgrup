@@ -23,8 +23,6 @@ function nemid_signgrup_menu() {
 
 /**
  * Implements hook_block_info().
- *
- * This hook declares what blocks are provided by the module.
  */
 function nemid_signgrup_block_info() {
   $blocks['nemid_signgrup_login'] = array(
@@ -37,8 +35,6 @@ function nemid_signgrup_block_info() {
 
 /**
  * Implements hook_block_configure().
- *
- * This hook declares configuration options for blocks provided by this module.
  */
 function nemid_signgrup_block_configure($delta = '') {
   $form = array();
@@ -57,9 +53,6 @@ function nemid_signgrup_block_configure($delta = '') {
 
 /**
  * Implements hook_block_save().
- *
- * This hook declares how the configured options for a block
- * provided by this module are saved.
  */
 function nemid_signgrup_block_save($delta = '', $edit = array()) {
   if ($delta == 'nemid_signgrup_login') {
@@ -69,8 +62,6 @@ function nemid_signgrup_block_save($delta = '', $edit = array()) {
 
 /**
  * Implements hook_block_view().
- *
- * This hook generates the contents of the blocks themselves.
  */
 function nemid_signgrup_block_view($delta = '') {
   $block = array(
@@ -78,7 +69,6 @@ function nemid_signgrup_block_view($delta = '') {
     'content' => '',
   );
 
-  // The $delta parameter tells us which block is being requested.
   switch ($delta) {
     case 'nemid_signgrup_login':
       nemid_signgrup_include('autoload');

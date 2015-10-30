@@ -7,15 +7,6 @@
 define('NEMID_SIGNGRUP_WD', 'nemid_signgrup');
 
 /**
- * Implements hook_boot().
- */
-function nemid_signgrup_boot() {
-  if ($vendor_path = variable_get('nemid_signgrup_vendor_dir', FALSE)) {
-    require_once $vendor_path . '/autoload.php';
-  }
-}
-
-/**
  * Implements hook_menu().
  */
 function nemid_signgrup_menu() {
@@ -90,6 +81,7 @@ function nemid_signgrup_block_view($delta = '') {
   // The $delta parameter tells us which block is being requested.
   switch ($delta) {
     case 'nemid_signgrup_login':
+      nemid_signgrup_include('autoload');
       if (!class_exists('AuthenticationPlugin\NemID\NemIDClient')) {
         drupal_set_message('NemID client could not be loaded because of insufficient configuration', 'error');
         return $block;
@@ -122,10 +114,11 @@ function nemid_signgrup_block_view($delta = '') {
  * NemID signup callback. Used to handle authentication success/failure.
  */
 function nemid_signgrup_callback() {
+  nemid_signgrup_include('autoload');
   $transaction_identifier = $_SESSION['nemid_signgrup_transaction_identifier'];
   unset($_SESSION['nemid_signgrup_transaction_identifier']);
 
-  $validator = new \AuthenticationPlugin\NemID\NemIDValidator();
+  $validator = new AuthenticationPlugin\NemID\NemIDValidator();
   $validation_result = $validator->ValidateNemIdResult($_POST["result"], $transaction_identifier);
   $nemid_info = $validation_result->getNemIDInfo();
 
@@ -163,5 +156,24 @@ function nemid_signgrup_callback() {
       'NemID authentication failed with a client flow error code: "@cf_error_code"',
       array('@cf_error_code' => $validation_result->getNemIDErrorCode())
     );
+  }
+}
+
+/**
+ * Include files from vendor directory.
+ *
+ * @param string $name
+ *   What to be included.
+ */
+function nemid_signgrup_include($name) {
+  $vendor_path = variable_get('nemid_signgrup_vendor_dir', FALSE);
+  if (!$vendor_path) {
+    return;
+  }
+
+  switch ($name) {
+    case 'autoload':
+      require_once $vendor_path . '/autoload.php';
+      break;
   }
 }

@@ -71,30 +71,29 @@ function nemid_signgrup_block_view($delta = '') {
 
   switch ($delta) {
     case 'nemid_signgrup_login':
-      nemid_signgrup_include('autoload');
-      if (!class_exists('AuthenticationPlugin\NemID\NemIDClient')) {
+      $client_conf = variable_get('nemid_signgrup_client_config', array());
+      nemid_signgrup_include();
+      if (!class_exists('NemIDClient') || empty($client_conf)) {
         drupal_set_message('NemID client could not be loaded because of insufficient configuration', 'error');
         return $block;
       }
-      $urls = new AuthenticationPlugin\NemID\AuthenticationBackendUrls();
-      $nemidClient = new AuthenticationPlugin\NemID\NemIDClient();
+
+      $client = new NemIDClient($client_conf);
       $block['content'] = array(
         'script_block' => array(
           '#type' => 'markup',
-          '#markup' => $nemidClient->generateNemIDOtpScriptBlock('/nemid-signgrup-callback'),
+          '#markup' => $client->generateNemIDOtpScriptBlock('/nemid-signgrup-callback'),
         ),
         'iframe' => array(
           '#type' => 'html_tag',
           '#tag' => 'iframe',
           '#attributes' => array(
-            'src' => $urls->iframeUrl,
+            'src' => $client->getIframeUrl(),
             'scrolling' => 'no',
             'style' => 'position:relative; width: 200px; height: 275px; border: none; margin: 0; padding: 0;',
           ),
         ),
       );
-      // Set NemID transaction identifier. Used to verify transaction in nemid_signgrup_callback().
-      $_SESSION['nemid_signgrup_transaction_identifier'] = $nemidClient->transactionIdentifier;
       break;
   }
   return $block;
@@ -104,66 +103,52 @@ function nemid_signgrup_block_view($delta = '') {
  * NemID signup callback. Used to handle authentication success/failure.
  */
 function nemid_signgrup_callback() {
-  nemid_signgrup_include('autoload');
-  $transaction_identifier = $_SESSION['nemid_signgrup_transaction_identifier'];
-  unset($_SESSION['nemid_signgrup_transaction_identifier']);
-
-  $validator = new AuthenticationPlugin\NemID\NemIDValidator();
-  $validation_result = $validator->ValidateNemIdResult($_POST["result"], $transaction_identifier);
+  nemid_signgrup_include();
+  $client_conf = variable_get('nemid_signgrup_client_config', array());
+  $validator = new NemIDValidator($client_conf);
+  $validation_result = $validator->ValidateNemIdResult($_POST["result"]);
   $nemid_info = $validation_result->getNemIDInfo();
-
-  $wd = function($validation_result, $nemid_info, $type = WATCHDOG_NOTICE) {
-    watchdog(
-      NEMID_SIGNGRUP_WD,
-      'Status code: @status_code. Log message: "@log_message". User info: "@user_info"',
-      array(
-        '@status_code' => $validation_result->getStatusCode(),
-        '@log_message' => $validation_result->getLogMessage(),
-        '@user_info' => $nemid_info->dn,
-      ),
-      $type
-    );
-  };
+  $message = !empty($validation_result->getUserMessage()) ? $validation_result->getUserMessage() : '';
+  $status_code = $validation_result->getStatusCode();
 
   if ($validation_result->authenticationSuccess()) {
-    $wd($validation_result, $nemid_info);
-    module_invoke_all('nemid_signgrup_callback_success', $validation_result->getNemIDInfo());
+    module_invoke_all('nemid_signgrup_callback_success', $nemid_info, $message);
   }
   else {
-    $wd($validation_result, $nemid_info, WATCHDOG_ERROR);
-    module_invoke_all('nemid_signgrup_callback_failure');
+    module_invoke_all('nemid_signgrup_callback_failure', $nemid_info, $message);
   }
 
-  if ($validation_result->userCancelled()) {
-    $wd($validation_result, $nemid_info, WATCHDOG_ERROR);
-    module_invoke_all('nemid_signgrup_callback_user_cancel', $validation_result->getNemIDInfo());
+  if (empty($status_code)) {
+    watchdog(NEMID_SIGNGRUP_WD, 'Error retrieving error code from backend', 'error');
+  }
+  else {
+    switch ($status_code) {
+      case NemIDAuthStatusCode::Ok:
+      case NemIDAuthStatusCode::ClientFlowCancel:
+        module_invoke_all('nemid_signgrup_callback_user_cancel', $nemid_info, $message);
+      case NemIDAuthStatusCode::ClientFlowError:
+        watchdog(NEMID_SIGNGRUP_WD, $validation_result->getLogMessage());
+        break;
+
+      case NemIDAuthStatusCode::AuthenticationBackendError:
+      case NemIDAuthStatusCode::AuthenticationPluginValidationError:
+        watchdog(NEMID_SIGNGRUP_WD, $validation_result->getLogMessage(), WATCHDOG_ERROR);
+        break;
+    }
   }
 
-  // On ClientFlowError, a specific NemID ErrorCode will be available.
-  if ($validation_result->getStatusCode() == \AuthenticationPlugin\NemID\StatusCode::ClientFlowError) {
-    watchdog(
-      NEMID_SIGNGRUP_WD,
-      'NemID authentication failed with a client flow error code: "@cf_error_code"',
-      array('@cf_error_code' => $validation_result->getNemIDErrorCode())
-    );
-  }
 }
 
 /**
  * Include files from vendor directory.
- *
- * @param string $name
- *   What to be included.
- */
-function nemid_signgrup_include($name) {
-  $vendor_path = variable_get('nemid_signgrup_vendor_dir', FALSE);
-  if (!$vendor_path) {
+ * */
+function nemid_signgrup_include() {
+  if (!$vendor_path = variable_get('nemid_signgrup_vendor_dir', FALSE)) {
     return;
   }
 
-  switch ($name) {
-    case 'autoload':
-      require_once $vendor_path . '/autoload.php';
-      break;
-  }
+  require_once $vendor_path . '/autoload.php';
+  class_alias('AuthenticationPlugin\NemID\NemIDClient', 'NemIDClient');
+  class_alias('AuthenticationPlugin\NemID\NemIDValidator', 'NemIDValidator');
+  class_alias('AuthenticationPlugin\NemID\StatusCode', 'NemIDAuthStatusCode');
 }

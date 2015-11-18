@@ -110,6 +110,7 @@ function nemid_signgrup_callback() {
   $nemid_info = $validation_result->getNemIDInfo();
   $message = !empty($validation_result->getUserMessage()) ? $validation_result->getUserMessage() : '';
   $status_code = $validation_result->getStatusCode();
+  $log_message = $validation_result->getLogMessage();
 
   if ($validation_result->authenticationSuccess()) {
     module_invoke_all('nemid_signgrup_callback_success', $nemid_info, $message);
@@ -119,7 +120,7 @@ function nemid_signgrup_callback() {
   }
 
   if (empty($status_code)) {
-    watchdog(NEMID_SIGNGRUP_WD, 'Error retrieving error code from backend', 'error');
+    watchdog(NEMID_SIGNGRUP_WD, 'Error retrieving error code from backend', array(), WATCHDOG_ERROR);
   }
   else {
     switch ($status_code) {
@@ -127,12 +128,12 @@ function nemid_signgrup_callback() {
       case NemIDAuthStatusCode::ClientFlowCancel:
         module_invoke_all('nemid_signgrup_callback_user_cancel', $nemid_info, $message);
       case NemIDAuthStatusCode::ClientFlowError:
-        watchdog(NEMID_SIGNGRUP_WD, $validation_result->getLogMessage());
+        watchdog(NEMID_SIGNGRUP_WD, $log_message);
         break;
 
       case NemIDAuthStatusCode::AuthenticationBackendError:
       case NemIDAuthStatusCode::AuthenticationPluginValidationError:
-        watchdog(NEMID_SIGNGRUP_WD, $validation_result->getLogMessage(), WATCHDOG_ERROR);
+        watchdog(NEMID_SIGNGRUP_WD, $log_message, array(), WATCHDOG_ERROR);
         break;
     }
   }

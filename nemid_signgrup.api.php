@@ -24,7 +24,7 @@ function hook_nemid_signgrup_callback_success($nemid_info, $message) {
  * @param string $message
  *   Message that can be exposed for users. Use it or write your own.
  */
-function hook_nemid_signgrup_callback_failure($nemid_info, $message) {
+function hook_nemid_signgrup_callback_failure($message) {
 
 }
 
@@ -36,6 +36,6 @@ function hook_nemid_signgrup_callback_failure($nemid_info, $message) {
  * @param string $message
  *   Message that can be exposed for users. Use it or write your own.
  */
-function hook_nemid_signgrup_callback_user_cancel($nemid_info, $message) {
+function hook_nemid_signgrup_callback_user_cancel($message) {
 
 }

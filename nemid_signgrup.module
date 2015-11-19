@@ -90,7 +90,7 @@ function nemid_signgrup_block_view($delta = '') {
           '#attributes' => array(
             'src' => $client->getIframeUrl(),
             'scrolling' => 'no',
-            'style' => 'position:relative; width: 200px; height: 275px; border: none; margin: 0; padding: 0;',
+            'style' => 'position:relative; width: 500px; height: 450px; border: none; margin: 0; padding: 0;',
           ),
         ),
       );

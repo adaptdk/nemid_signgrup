@@ -92,6 +92,7 @@ function nemid_signgrup_block_view($delta = '') {
             'scrolling' => 'no',
             'style' => 'position:relative; width: 500px; height: 450px; border: none; margin: 0; padding: 0;',
           ),
+          '#value' => '',
         ),
       );
       break;

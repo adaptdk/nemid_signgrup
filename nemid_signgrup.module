@@ -17,6 +17,14 @@ function nemid_signgrup_menu() {
     'access arguments' => array('access content'),
     'type' => MENU_NORMAL_ITEM,
   );
+  $items['admin/config/services/nemid-signgrup-config'] = array(
+    'title' => 'NemID',
+    'description' => 'Configure NemID settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('nemid_signgrup_configure'),
+    'access arguments' => array('configure nemid signgrup'),
+    'type' => MENU_NORMAL_ITEM,
+  );
 
   return $items;
 }
@@ -34,30 +42,45 @@ function nemid_signgrup_block_info() {
 }
 
 /**
- * Implements hook_block_configure().
+ * Configure NemID settings form.
+ *
+ * @return array
+ *   NemID configuration form array.
  */
-function nemid_signgrup_block_configure($delta = '') {
+function nemid_signgrup_configure() {
   $form = array();
-  if ($delta == 'nemid_signgrup_login') {
-    $form['vendor_dir'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Vendor path'),
-      '#size' => 60,
-      '#description' => t('The relative path to the vendor library from the drupal root.'),
-      '#default_value' => variable_get('nemid_signgrup_vendor_dir', ''),
-      '#required' => TRUE,
-    );
-  }
-  return $form;
-}
+  $form['vendor_dir'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Vendor path'),
+    '#size' => 60,
+    '#description' => t('The relative path to the vendor library from the drupal root.'),
+    '#default_value' => variable_get('nemid_signgrup_vendor_dir', ''),
+    '#required' => TRUE,
+  );
 
-/**
- * Implements hook_block_save().
- */
-function nemid_signgrup_block_save($delta = '', $edit = array()) {
-  if ($delta == 'nemid_signgrup_login') {
-    variable_set('nemid_signgrup_vendor_dir', $edit['vendor_dir']);
-  }
+  $values = variable_get('nemid_signgrup_client_config');
+  $form['nemid_signgrup_client_config'] = array(
+    '#type' => 'fieldset',
+    '#tree' => TRUE,
+    '#title' => t('Client configuration'),
+  );
+  foreach (array(
+    array('AUTHENTICATION_BACKEND_CERT', 100),
+    array('PLUGIN_CERT', 100),
+    array('PLUGIN_CERT_PASSWORD', 20),
+    array('CLIENT_ID', 20),
+    array('AUTHENTICATION_BACKEND_URL', 80),
+  ) as $config) {
+    list($config_key, $size) = $config;
+    $form['nemid_signgrup_client_config'][$config_key] = array(
+      '#type' => 'textfield',
+      '#title' => $config_key,
+      '#size' => $size,
+      '#default_value' => isset($values[$config_key]) ? $values[$config_key] : '',
+    );
+  };
+
+  return system_settings_form($form);
 }
 
 /**
@@ -155,7 +178,6 @@ function nemid_signgrup_include() {
   if (!$vendor_path = variable_get('nemid_signgrup_vendor_dir', FALSE)) {
     return;
   }
-
   require_once $vendor_path . '/autoload.php';
   class_alias('AuthenticationPlugin\NemID\NemIDClient', 'NemIDClient');
   class_alias('AuthenticationPlugin\NemID\NemIDValidator', 'NemIDValidator');
